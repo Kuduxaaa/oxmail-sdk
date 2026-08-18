@@ -1,0 +1,71 @@
+[build-system]
+requires = ["setuptools>=77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oxmail-sdk"
+dynamic = ["version"]
+description = "Typed OOP Python SDK for Open-Xchange mail operations"
+readme = { file = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.11"
+keywords = ["open-xchange", "openexchange", "ox", "mail", "email", "sdk"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Communications :: Email",
+  "Typing :: Typed",
+]
+dependencies = [
+  "requests>=2.32,<3",
+  "urllib3>=2.2,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+  "build>=1.2",
+  "mypy>=1.11",
+  "pytest>=8.3",
+  "pytest-cov>=5",
+  "ruff>=0.6",
+  "twine>=5.1",
+  "types-requests>=2.32",
+]
+
+[tool.setuptools.dynamic]
+version = { attr = "oxmail_sdk._version.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+oxmail_sdk = ["py.typed"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+packages = ["oxmail_sdk"]
+
+[tool.coverage.run]
+branch = true
+source = ["oxmail_sdk"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
