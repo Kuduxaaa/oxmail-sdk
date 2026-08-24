@@ -10,5 +10,6 @@ build/
 dist/
 .venv/
 venv/
+temp/
 .env
 .DS_Store

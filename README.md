@@ -5,6 +5,23 @@ Typed, object-oriented Python SDK for the Open-Xchange mail endpoints used by Ap
 > This SDK currently targets the authentication and mail flows that have been verified in the
 > target Open-Xchange deployment. It does not claim complete coverage of the entire App Suite API.
 
+## Documentation
+
+Full guides live in [docs/](docs/README.md):
+
+| Guide | Contents |
+| --- | --- |
+| [Getting started](docs/getting-started.md) | install, first script, mental model |
+| [Configuration](docs/configuration.md) | `ClientConfig`, timeouts, retries, IMAP settings |
+| [Authentication](docs/authentication.md) | sessions, OX Guard, automatic re-authentication |
+| [Sending mail](docs/sending.md) | HTML/plain, CC/BCC, attachments, send results |
+| [Reading mail](docs/reading.md) | listing, pagination, bodies, `MailMessage` |
+| [Watching the inbox](docs/watching.md) | IMAP IDLE, HTTP fallback, checkpoints |
+| [Errors and reliability](docs/errors.md) | exception hierarchy, retry semantics, logging |
+| [Recipes](docs/recipes.md) | webhooks, auto-responder, ingestion daemon, cron, systemd |
+| [Testing](docs/testing.md) | fixtures, fake backends, mocked transport |
+| [API reference](docs/api-reference.md) | every public signature |
+
 ## Architecture
 
 The package follows separation of concerns:
@@ -19,10 +36,19 @@ oxmail_sdk/
 │   └── service.py             # login / guard / logout lifecycle
 ├── mail/
 │   ├── attachments.py         # attachment sources
+│   ├── columns.py             # OX column ids, field names, IMAP flags
 │   ├── constants.py           # mail endpoint constants
+│   ├── message.py             # parsed message model (headers + body)
 │   ├── models.py              # mail DTOs
 │   ├── serializer.py          # OX wire-format + multipart serialization
-│   └── service.py             # mail use-cases
+│   ├── service.py             # mail use-cases
+│   ├── sources.py             # IMAP / HTTP backends + failover
+│   ├── state.py               # folder state + checkpoint persistence
+│   └── watch.py               # inbox watching (iterator + worker thread)
+├── imap/
+│   ├── config.py              # IMAP connection settings
+│   ├── connection.py          # imaplib wrapper: select, status, fetch, IDLE
+│   └── parsing.py             # IMAP/RFC822 -> SDK model conversion
 └── transport/
     ├── http.py                # requests session, pooling, retries, HTTP status
     └── parsing.py             # response parsing + OX API errors
@@ -129,6 +155,42 @@ Automatic pagination:
 for row in client.mail.iter_messages(page_size=100, max_messages=500):
     print(row)
 ```
+
+## Inbox watching
+
+`client.mail.watch()` delivers new mail as it arrives. Two backends serve the same API: IMAP with
+`IDLE` (primary, push, zero idle cost) and HTTP `mail?action=examine` polling (fallback, one ~160
+byte request per interval). `backend="auto"` runs IMAP and fails over to HTTP automatically.
+
+```python
+for message in client.mail.watch():
+    print(message.id, message.sender, message.subject, message.received_at)
+```
+
+```python
+watcher = client.mail.watch(fetch_body=True).background(
+    on_message=lambda message: print("new mail:", message.subject),
+)
+watcher.start()
+...
+watcher.stop()
+```
+
+Because Open-Xchange mail ids are IMAP UIDs, both backends produce identical message ids and share
+their checkpoints, so a failover never replays or drops a message.
+
+```python
+from oxmail_sdk import JSONFileCheckpointStore
+
+watcher = client.mail.watch(
+    backend="auto",                                        # or "imap" / "http"
+    fetch_body=True,                                       # download bodies; peeks by default
+    store=JSONFileCheckpointStore("inbox-state.json"),     # resume across restarts
+)
+```
+
+Full details — backend selection, bodies and attachments, checkpoint stores, failover, error
+handling and tuning — are in [docs/watching.md](docs/watching.md).
 
 ## Custom configuration
 

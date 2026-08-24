@@ -4,3 +4,4 @@ include SECURITY.md
 recursive-include tests *.py
 recursive-include examples *.py
 include PUBLISHING.md
+recursive-include docs *.md

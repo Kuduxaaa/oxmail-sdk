@@ -5,6 +5,7 @@ from urllib.parse import urlsplit
 
 from ._version import __version__
 from .exceptions import ConfigurationError
+from .imap.config import IMAPConfig
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +51,7 @@ class ClientConfig:
     verify_tls: bool | str = True
     timeout: TimeoutConfig = field(default_factory=TimeoutConfig)
     retries: RetryConfig = field(default_factory=RetryConfig)
+    imap: IMAPConfig = field(default_factory=IMAPConfig)
     pool_connections: int = 10
     pool_maxsize: int = 10
 
@@ -72,3 +74,7 @@ class ClientConfig:
     @property
     def referer(self) -> str:
         return f"{self.origin}/appsuite/"
+
+    @property
+    def imap_host(self) -> str:
+        return self.imap.resolve_host(self.base_url)

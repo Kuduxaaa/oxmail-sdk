@@ -29,6 +29,10 @@ class TransportError(OXMailError):
     """Raised for DNS, connection, TLS, timeout, and other transport failures."""
 
 
+class IMAPError(OXMailError):
+    """Raised when the IMAP backend cannot connect, authenticate or read."""
+
+
 @dataclass(slots=True)
 class HTTPError(OXMailError):
     status_code: int
@@ -51,6 +55,10 @@ class InvalidResponseError(OXMailError):
         return f"{self.message}{suffix}"
 
 
+#: Open-Xchange error codes that mean "log in again".
+SESSION_ERROR_CODE_PREFIX = "SES-"
+
+
 @dataclass(slots=True)
 class APIError(OXMailError):
     message: str
@@ -61,11 +69,7 @@ class APIError(OXMailError):
 
     @classmethod
     def from_payload(cls, payload: Mapping[str, Any]) -> APIError:
-        message = str(
-            payload.get("error")
-            or payload.get("error_desc")
-            or "Open-Xchange API error"
-        )
+        message = str(payload.get("error") or payload.get("error_desc") or "Open-Xchange API error")
         return cls(
             message=message,
             error_id=_optional_str(payload.get("error_id")),
@@ -73,6 +77,12 @@ class APIError(OXMailError):
             category=_optional_str(payload.get("category")),
             raw=dict(payload),
         )
+
+    @property
+    def session_expired(self) -> bool:
+        """True when Open-Xchange rejected the session token itself."""
+
+        return bool(self.code and self.code.startswith(SESSION_ERROR_CODE_PREFIX))
 
     def __str__(self) -> str:
         details: list[str] = []

@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import logging
 import time
-from typing import Any
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from ..exceptions import APIError, AuthenticationError, NotAuthenticatedError
 from ..transport import HTTPTransport
 from .models import Credentials, SessionInfo
+
+logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
 
 
 class AuthService:
@@ -15,10 +21,17 @@ class AuthService:
         self._transport = transport
         self._credentials = credentials
         self._session_info: SessionInfo | None = None
+        self._oxguard = True
 
     @property
     def username(self) -> str:
         return self._credentials.username
+
+    @property
+    def credentials(self) -> Credentials:
+        """Credentials used for this session, for backends that authenticate separately."""
+
+        return self._credentials
 
     @property
     def authenticated(self) -> bool:
@@ -35,6 +48,7 @@ class AuthService:
         return self._session_info.session
 
     def login(self, *, oxguard: bool = True) -> SessionInfo:
+        self._oxguard = oxguard
         try:
             payload = self._transport.request_json(
                 "POST",
@@ -69,6 +83,32 @@ class AuthService:
                 self.clear_local_session()
             raise
         return info
+
+    def ensure_authenticated(self) -> SessionInfo:
+        """Return the current session, logging in on first use."""
+
+        if self._session_info is not None:
+            return self._session_info
+        return self.login(oxguard=self._oxguard)
+
+    def refresh(self) -> SessionInfo:
+        """Drop the local session and log in again with the same options."""
+
+        self.clear_local_session()
+        return self.login(oxguard=self._oxguard)
+
+    def run_with_session_retry(self, operation: Callable[[], T]) -> T:
+        """Run ``operation``, re-logging in once if the session expired."""
+
+        self.ensure_authenticated()
+        try:
+            return operation()
+        except (APIError, NotAuthenticatedError) as exc:
+            if isinstance(exc, APIError) and not exc.session_expired:
+                raise
+            logger.info("session rejected by Open-Xchange; re-authenticating")
+            self.refresh()
+            return operation()
 
     def authenticate_oxguard(self) -> dict[str, Any]:
         try:
